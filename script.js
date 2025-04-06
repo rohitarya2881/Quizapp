@@ -10,6 +10,9 @@ let quizMode = ""; // Tracks the current quiz mode (e.g., "complete" or "difficu
 let questionStartTime = 0;
 let questionTimes = []; // Array to store time taken for each question
 let totalQuizTime = 0;
+// Add to your global variables
+let flashcardInterval = null;
+let flashcardStartTime = 0;
 // Initialize IndexedDB
 // Update the initDB function in script.js
 function initDB() {
@@ -191,6 +194,8 @@ function updateFolderList() {
 
 // Handle folder selection
 function selectFolder() {
+  currentFolder = document.getElementById("folderSelect").value;
+  trackFolderUsage(currentFolder); // Add this line
   currentFolder = document.getElementById("folderSelect").value;
   const quizOptions = document.getElementById("quizOptions");
 
@@ -450,54 +455,25 @@ async function showResults() {
   }
 }
 
-function triggerHighAccuracyCelebration() {
-  // Fireworks effect
-  playCelebrationSound();
-
-  const duration = 3000;
-  const animationEnd = Date.now() + duration;
-  const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 1000 };
-
-  function randomInRange(min, max) {
-    return Math.random() * (max - min) + min;
-  }
-
-  const interval = setInterval(function() {
-    const timeLeft = animationEnd - Date.now();
-
-    if (timeLeft <= 0) {
-      return clearInterval(interval);
+function triggerFlashcardMilestoneCelebration(milestone) {
+  try {
+    if (!milestone) return;
+    
+    // Gentle confetti for milestones
+    if (milestone.confetti) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#4a6fa5', '#2ecc71', '#3498db', '#f1c40f'],
+        scalar: 0.8
+      });
     }
 
-    const particleCount = 50 * (timeLeft / duration);
-    confetti({
-      ...defaults,
-      particleCount,
-      origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
-    });
-    confetti({
-      ...defaults,
-      particleCount,
-      origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
-    });
-  }, 250);
-
-  // Floating trophy animation
-  const trophy = document.createElement('div');
-  trophy.innerHTML = '🏆';
-  trophy.style.position = 'fixed';
-  trophy.style.fontSize = '100px';
-  trophy.style.left = '50%';
-  trophy.style.top = '50%';
-  trophy.style.transform = 'translate(-50%, -50%) scale(0)';
-  trophy.style.zIndex = '1001';
-  trophy.style.textShadow = '0 0 10px gold';
-  trophy.style.animation = 'trophyRise 2s forwards';
-  document.body.appendChild(trophy);
-
-  setTimeout(() => {
-    trophy.remove();
-  }, 2000);
+    // ... rest of the function ...
+  } catch (e) {
+    console.error("Error in milestone celebration:", e);
+  }
 }
 
 
@@ -601,46 +577,489 @@ function showFlashcards() {
     flashcardContainer.appendChild(flashcard);
   });
   encouragementInterval = setInterval(() => {
-    if (Math.random() > 0.7) { // 30% chance to show
+    if (Math.random() > 0.3) { // 30% chance to show
       showRandomEncouragement();
     }
-  }, 30000); // Every 30 seconds
+  }, 140000); // Every 30 seconds
+  startFlashcardStudySession(currentFolder);
+
 }
 
-function showRandomEncouragement() {
-  const messages = [
-    { text: "You're doing great! 👍", emoji: "✨" },
-    { text: "Knowledge is power! 💪", emoji: "🧠" },
-    { text: "Every minute counts! ⏱️", emoji: "🌟" }
-  ];
-  const msg = messages[Math.floor(Math.random() * messages.length)];
+// Enhanced encouragement system with improved timing and context awareness
+let lastEncouragementTime = 0;
+let lastBreakReminder = 0;
+let encouragementLevel = 0;
+let encouragementHistory = [];
+const MAX_HISTORY = 20; // Keep last 20 messages to avoid repetition
+
+function showContextualEncouragement() {
+  if (!currentFolder || !flashcardStartTime) return;
   
+  const now = Date.now();
+  const today = new Date().toISOString().split('T')[0];
+  const folderStudyTime = flashcardDailyStudyTime[today]?.[currentFolder] || 0;
+  const elapsedMinutes = Math.floor(folderStudyTime / 60);
+  const accuracy = calculateCurrentAccuracy();
+  
+  // Don't show too frequently (minimum 90 seconds between messages)
+  if (now - lastEncouragementTime < 90000 && Math.random() > 0.2) return;
+  
+  lastEncouragementTime = now;
+  encouragementLevel = Math.min(encouragementLevel + 1, 10); // Track session intensity
+
+  // Determine message category based on multiple factors
+  let category = 'default';
+  const currentThreshold = getCurrentThreshold(folderStudyTime);
+  const isDifficult = incorrectQuestions.length > currentQuiz.length * 0.3;
+  const needsBreak = now - lastBreakReminder > 1800000; // 30 minutes
+  const isHighAccuracy = accuracy > 85;
+  const isLowAccuracy = accuracy < 60;
+
+  if (needsBreak) {
+    category = 'break';
+    lastBreakReminder = now;
+  } 
+  else if (isDifficult) {
+    category = 'challenge';
+  } 
+  else if (isHighAccuracy) {
+    category = 'highAccuracy';
+  }
+  else if (isLowAccuracy) {
+    category = 'lowAccuracy';
+  }
+  else if (currentThreshold) {
+    category = currentThreshold.type;
+  }
+
+  // Get appropriate message
+  const msg = selectMessage(category, {
+    studyTime: folderStudyTime,
+    questionCount: currentQuestionIndex + 1,
+    difficulty: incorrectQuestions.length,
+    level: encouragementLevel,
+    accuracy: accuracy,
+    folderName: currentFolder
+  });
+
+  // Display the notification
+  displayEncouragement(msg, category);
+  
+  // Track message history to avoid repeats
+  encouragementHistory.push(msg.text);
+  if (encouragementHistory.length > MAX_HISTORY) {
+    encouragementHistory.shift();
+  }
+}
+
+function calculateCurrentAccuracy() {
+  if (currentQuestionIndex === 0) return 0;
+  return Math.round((score / currentQuestionIndex) * 100);
+}
+
+// Enhanced threshold detection with more granular levels
+function getCurrentThreshold(studyTime) {
+  const thresholds = [
+    { time: 300,   type: 'general' },    // 5 minutes
+    { time: 900,   type: 'progress' },   // 15 minutes
+    { time: 1800,  type: 'milestone' },  // 30 minutes
+    { time: 2700,  type: 'achievement' }, // 45 minutes
+    { time: 3600,  type: 'victory' },    // 1 hour
+    { time: 5400,  type: 'extended' },   // 1.5 hours
+    { time: 7200,  type: 'marathon' },   // 2 hours
+    { time: 10800, type: 'legendary' }   // 3 hours
+  ];
+  
+  return thresholds.slice().reverse().find(t => studyTime >= t.time);
+}
+
+// Enhanced message selection with more context awareness
+function selectMessage(category, context) {
+  const { studyTime, questionCount, difficulty, level, accuracy, folderName } = context;
+  const mins = Math.floor(studyTime / 60);
+  const subject = detectSubject(folderName);
+  
+  // Base messages with enhanced variety
+  let messages = {
+    // Early Session (0-5 mins)
+    general: [
+      { text: "Great start! You've got this! 💪", emoji: "✨", sound: "start", intensity: 1 },
+      { text: "Learning mode activated! 🧠", emoji: "⚡", sound: "powerup", intensity: 2 },
+      { text: "SSC success starts now! 🎯", emoji: "📌", sound: "begin", intensity: 3 },
+      { text: "First card mastered - many to go! 📇", emoji: "🔄", sound: "flip", intensity: 2 },
+      { text: "Brain cells firing up! 🔥", emoji: "🧪", sound: "spark", intensity: 3 },
+      { text: "Let's make today count! 🗓️", emoji: "✏️", sound: "write", intensity: 1 },
+      { text: "Knowledge is power - charging up! 🔋", emoji: "⚡", sound: "charge", intensity: 2 },
+      { text: "Another step toward your goal! 👣", emoji: "🏁", sound: "step", intensity: 1 }
+    ],
+  
+    // Progress Tracking (5-30 mins)
+    progress: [
+      { text: `You've reviewed ${questionCount} cards! 📚`, emoji: "📊", sound: "progress", intensity: 2 },
+      { text: `${mins} minutes of quality study! ⏳`, emoji: "🔄", sound: "time", intensity: 1 },
+      { text: `Accuracy: ${accuracy}% - solid work! 🎯`, emoji: "✅", sound: "hit", intensity: 3 },
+      { text: "Neural pathways strengthening! 🛣️", emoji: "🧠", sound: "build", intensity: 2 },
+      { text: "Retention rate climbing! 📈", emoji: "🔼", sound: "rising", intensity: 3 },
+      { text: "Memory muscles getting stronger! 💪", emoji: "🏋️", sound: "gains", intensity: 2 },
+      { text: "You're in the top 20% of studiers! 🔝", emoji: "🎖️", sound: "medal", intensity: 3 },
+      { text: "Consistency beats intensity! 🐢", emoji: "🏁", sound: "slow", intensity: 1 }
+    ],
+  
+    // Milestones (30+ mins)
+    milestone: [
+      { text: `30 minutes! You're crushing it! 🏋️`, emoji: "🔥", sound: "achievement", intensity: 3 },
+      { text: "Half-hour of brain gains! 🧠", emoji: "💪", sound: "strong", intensity: 2 },
+      { text: "Study stamina increasing! 🏃‍♂️", emoji: "📈", sound: "levelup", intensity: 3 },
+      { text: "The compound effect is working! 💹", emoji: "📊", sound: "growth", intensity: 2 },
+      { text: "Now we're cooking with knowledge! 🧑‍🍳", emoji: "🍳", sound: "sizzle", intensity: 1 },
+      { text: "Serious learner status achieved! 🎓", emoji: "👨‍🎓", sound: "graduate", intensity: 3 },
+      { text: "This is where mastery begins! 🛣️", emoji: "🏁", sound: "journey", intensity: 2 }
+    ],
+  
+    // Major Achievements (45+ mins)
+    achievement: [
+      { text: `45 minutes! Super impressive! 🦸`, emoji: "🌟", sound: "super", intensity: 3 },
+      { text: "You're a study machine! 🤖", emoji: "⚙️", sound: "mechanical", intensity: 3 },
+      { text: "Triple-quarter hour of power! ⏱️", emoji: "⚡", sound: "energy", intensity: 3 },
+      { text: "Future SSC topper in the making! 🏆", emoji: "👑", sound: "royal", intensity: 3 },
+      { text: "Knowledge warrior! ⚔️", emoji: "🛡️", sound: "battle", intensity: 3 },
+      { text: "This discipline will pay off! 💰", emoji: "🏦", sound: "coins", intensity: 2 }
+    ],
+  
+    // Victory (60+ mins)
+    victory: [
+      { text: `HOUR OF POWER! 🎯 (${mins} minutes)`, emoji: "🚀", sound: "fanfare", intensity: 3 },
+      { text: "Study champion! 🏆", emoji: "👑", sound: "triumph", intensity: 3 },
+      { text: "60 minutes of focused learning! 💎", emoji: "⏳", sound: "diamond", intensity: 3 },
+      { text: "Elite study session complete! 🥇", emoji: "🎖️", sound: "gold", intensity: 3 },
+      { text: "You're in the top 10% now! 🔟", emoji: "💯", sound: "perfect", intensity: 3 },
+      { text: "This is how SSC dreams come true! ✨", emoji: "🌠", sound: "magic", intensity: 3 }
+    ],
+  
+    // Challenging Material
+    challenge: [
+      { text: `Tough questions = Stronger learning! 💪`, emoji: "🧗", sound: "climb", intensity: 2 },
+      { text: `Mastering ${difficulty} difficult cards! 🎯`, emoji: "🎯", sound: "target", intensity: 3 },
+      { text: "The struggle is where growth happens! 🌱", emoji: "🪴", sound: "grow", intensity: 2 },
+      { text: "This challenge will make you smarter! 🧠+", emoji: "📈", sound: "progress", intensity: 3 },
+      { text: "Embrace the difficulty! 💎", emoji: "⛏️", sound: "mine", intensity: 3 },
+      { text: "You'll remember these the longest! 🏗️", emoji: "🧱", sound: "build", intensity: 2 }
+    ],
+  
+    // Break Reminders
+    break: [
+      { text: "Microbreak time! Stretch! 🤸", emoji: "⏸️", sound: "pause", intensity: 1 },
+      { text: "Quick posture check! 🧘", emoji: "🪑", sound: "adjust", intensity: 1 },
+      { text: "20-20-20 rule: Look 20ft away 👁️", emoji: "🏙️", sound: "focus", intensity: 1 },
+      { text: "Hydrate for better focus! 💧", emoji: "🚰", sound: "water", intensity: 1 },
+      { text: "Deep breaths boost oxygen! 🌬️", emoji: "🌿", sound: "breathe", intensity: 1 },
+      { text: "Quick walk = Better retention! 🚶‍♂️", emoji: "👟", sound: "walk", intensity: 1 }
+    ],
+  
+    // Default Messages
+    default: [
+      { text: "Keep flipping! Each card matters! 🔄", emoji: "👏", sound: "flip", intensity: 1 },
+      { text: "Your brain loves this workout! 🏋️‍♂️", emoji: "🧠", sound: "gains", intensity: 2 },
+      { text: "Active recall in progress... ⚙️", emoji: "🔧", sound: "gear", intensity: 2 },
+      { text: "Spaced repetition working! ✨", emoji: "⏱️", sound: "magic", intensity: 1 },
+      { text: "Neuroplasticity activated! 🧫", emoji: "🔬", sound: "science", intensity: 2 }
+    ],
+  
+    // SSC CGL Subject-Specific
+    subject: {
+      math: [
+        { text: "Quantitative ninja in training! 🥷", emoji: "➗", sound: "sword", intensity: 3 },
+        { text: "Math shortcuts saving time! ⏱️", emoji: "✖️", sound: "speed", intensity: 3 },
+        { text: "Algebra/Geometry mastered! 📐", emoji: "📏", sound: "measure", intensity: 2 }
+      ],
+      english: [
+        { text: "Vocabulary vault expanding! 📚", emoji: "🔠", sound: "page", intensity: 2 },
+        { text: "Grammar guru status! 📝", emoji: "✔️", sound: "correct", intensity: 3 },
+        { text: "Idioms conquered! 💬", emoji: "🗣️", sound: "talk", intensity: 2 }
+      ],
+      reasoning: [
+        { text: "Logical circuits firing! 🧩", emoji: "🤔", sound: "think", intensity: 3 },
+        { text: "Puzzles solved with ease! 🎲", emoji: "🔍", sound: "eureka", intensity: 3 }
+      ],
+      gk: [
+        { text: "Static GK no match for you! 🛡️", emoji: "⚔️", sound: "battle", intensity: 2 },
+        { text: "Current affairs updated! 📰", emoji: "🗞️", sound: "news", intensity: 2 }
+      ]
+    },
+  
+    // Productivity Tips (shown periodically)
+    productivity: [
+      { text: "Tip: Pomodoro technique boosts focus! 🍅", emoji: "⏲️", sound: "timer", intensity: 1 },
+      { text: "Fact: Handwritten notes improve recall by 40% ✍️", emoji: "📝", sound: "write", intensity: 2 },
+      { text: "SSC Hack: Master 5 formulas daily 📚", emoji: "🔢", sound: "math", intensity: 3 },
+      { text: "Study smarter: Teach what you learn 👨‍🏫", emoji: "📢", sound: "teach", intensity: 2 }
+    ],
+  
+    // Fun Facts (SSC/Study Related)
+   
+  
+    // Intensity-Based Messages
+    intensity: {
+      low: [
+        { text: "Small steps still move you forward 🐢", emoji: "🌱", sound: "grow", intensity: 1 },
+        { text: "Progress is progress, no matter how small 👣", emoji: "🔄", sound: "step", intensity: 1 }
+      ],
+      high: [
+        { text: "UNSTOPPABLE LEARNING MACHINE! 🤖", emoji: "⚡", sound: "laser", intensity: 3 },
+        { text: "NOTHING can stop you today! 🚧", emoji: "🔥", sound: "explosion", intensity: 3 }
+      ]
+    },
+  
+    // New categories
+    highAccuracy: [
+      { text: `Accuracy ${accuracy}%! You're crushing it! 🎯`, emoji: "🏅", sound: "perfect", intensity: 3 },
+      { text: "Nearly perfect! Your focus is paying off! 💎", emoji: "🔮", sound: "sparkle", intensity: 2 },
+      { text: "Mastery in progress! Keep this streak going! 🔥", emoji: "🚀", sound: "rocket", intensity: 3 }
+    ],
+    
+    lowAccuracy: [
+      { text: "Mistakes are learning opportunities! 🌱", emoji: "🔄", sound: "retry", intensity: 1 },
+      { text: "Each error makes you stronger! 💪", emoji: "📈", sound: "progress", intensity: 2 },
+      { text: "Focus on understanding - speed will come! 🐢", emoji: "🏁", sound: "slow", intensity: 1 }
+    ],
+    
+    extended: [
+      { text: "90 minutes of intense focus! You're unstoppable! 🦾", emoji: "⏱️", sound: "time", intensity: 3 },
+      { text: "1.5 hours deep - your dedication is inspiring! 🌟", emoji: "💎", sound: "diamond", intensity: 3 }
+    ],
+    
+    marathon: [
+      { text: "2 HOUR STUDY MARATHON! 🏃‍♂️", emoji: "🎽", sound: "fanfare", intensity: 3 },
+      { text: "Elite learning session! Your brain is thriving! 🧠", emoji: "⚡", sound: "power", intensity: 3 }
+    ],
+    
+    legendary: [
+      { text: "LEGENDARY 3 HOUR SESSION! ⚡", emoji: "🏆", sound: "triumph", intensity: 3 },
+      { text: "You're in the top 1% of studiers now! 💎", emoji: "👑", sound: "royal", intensity: 3 }
+    ],
+    
+    // Enhanced subject-specific messages
+    subject: {
+      math: [
+        { text: "Quantitative skills sharpening! ➗", emoji: "✖️", sound: "calculate", intensity: 2 },
+        { text: "Math patterns becoming clear! 🔢", emoji: "🧮", sound: "numbers", intensity: 2 },
+        { text: "SSC math shortcuts mastered! ⚡", emoji: "🏃‍♂️", sound: "speed", intensity: 3 }
+      ],
+      english: [
+        { text: "Vocabulary expanding rapidly! 📖", emoji: "🔤", sound: "words", intensity: 2 },
+        { text: "Grammar rules clicking into place! 📝", emoji: "✔️", sound: "correct", intensity: 2 },
+        { text: "Idiom mastery achieved! 💬", emoji: "🗣️", sound: "talk", intensity: 3 }
+      ],
+      reasoning: [
+        { text: "Logical thinking at its peak! 🧩", emoji: "🤔", sound: "think", intensity: 3 },
+        { text: "Puzzles solved with precision! 🎯", emoji: "🔍", sound: "eureka", intensity: 3 }
+      ],
+      gk: [
+        { text: "General knowledge expanding! 🌎", emoji: "🧠", sound: "knowledge", intensity: 2 },
+        { text: "Current affairs mastered! 📰", emoji: "🗞️", sound: "news", intensity: 2 }
+      ],
+      science: [
+        { text: "Scientific concepts crystallizing! 🔬", emoji: "🧪", sound: "science", intensity: 2 },
+        { text: "Biology/Physics/Chemistry mastered! ⚛️", emoji: "🌡️", sound: "experiment", intensity: 3 }
+      ],
+      history: [
+        { text: "Historical timelines memorized! ⏳", emoji: "🏛️", sound: "history", intensity: 2 },
+        { text: "Ancient/Medieval/Modern mastered! 📜", emoji: "🖋️", sound: "document", intensity: 3 }
+      ],
+      polity: [
+        { text: "Constitutional knowledge solidifying! ⚖️", emoji: "📜", sound: "law", intensity: 2 },
+        { text: "Government structures understood! 🏛️", emoji: "🏢", sound: "government", intensity: 3 }
+      ]
+    }
+  };
+
+  // Get base messages for category
+  let availableMessages = [...messages[category] || [], ...messages['default']];
+  
+  // Add subject-specific messages if detected
+  if (subject && messages.subject?.[subject]) {
+    availableMessages = availableMessages.concat(messages.subject[subject]);
+  }
+  
+  // Filter out recently shown messages
+  const freshMessages = availableMessages.filter(msg => 
+    !encouragementHistory.includes(msg.text)
+  );
+  
+  // Fall back to all messages if we've shown them all recently
+  const messagePool = freshMessages.length > 0 ? freshMessages : availableMessages;
+  
+  // Add level-based messages for high intensity sessions
+  if (level > 7) {
+    messagePool.push(
+      { text: "Incredible focus! Keep riding this wave! 🌊", emoji: "🤯", sound: "amazing", intensity: 3 },
+      { text: "Next-level studying! You're on fire! 🔥", emoji: "🚒", sound: "fire", intensity: 3 }
+    );
+  }
+  
+  // Weight messages by intensity (higher intensity more likely when level is high)
+  const weightedMessages = [];
+  messagePool.forEach(msg => {
+    const weight = msg.intensity <= level ? (msg.intensity * 2) : 1;
+    for (let i = 0; i < weight; i++) {
+      weightedMessages.push(msg);
+    }
+  });
+  
+  // Select random message from weighted pool
+  return weightedMessages[Math.floor(Math.random() * weightedMessages.length)];
+}
+
+// Enhanced display with animations and tracking
+function displayEncouragement(msg, category) {
+  // Create notification element
   const bubble = document.createElement('div');
+  bubble.className = `encouragement-bubble ${category} intensity-${msg.intensity}`;
+  
+  // Add study time for relevant categories
+  const showStudyTime = ['progress', 'milestone', 'achievement', 'victory', 'extended', 'marathon', 'legendary'].includes(category);
+  const today = new Date().toISOString().split('T')[0];
+  const studyTime = flashcardDailyStudyTime[today]?.[currentFolder] || 0;
+  
   bubble.innerHTML = `
-    <div style="
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: rgba(255,255,255,0.9);
-      color: #333;
-      padding: 10px 15px;
-      border-radius: 20px;
-      font-size: 0.9em;
-      z-index: 999;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      animation: fadeInOut 3s forwards;
-    ">
-      <span style="font-size: 1.2em;">${msg.emoji}</span>
-      ${msg.text}
+    <div class="encouragement-content">
+      <span class="encouragement-emoji">${msg.emoji}</span>
+      <div class="encouragement-text-container">
+        <span class="encouragement-text">${msg.text}</span>
+        ${showStudyTime ? `<div class="study-time">${formatStudyTime(studyTime)}</div>` : ''}
+      </div>
     </div>
   `;
-  document.body.appendChild(bubble);
+
+  // Position randomly but within viewport
+  const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+  const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+  const left = Math.max(10, Math.min(vw - 300, Math.random() * (vw - 300)));
+  const top = Math.max(10, Math.min(vh - 100, Math.random() * (vh - 100)));
   
-  setTimeout(() => bubble.remove(), 3000);
+  bubble.style.position = 'fixed';
+  bubble.style.left = `${left}px`;
+  bubble.style.top = `${top}px`;
+  
+  document.body.appendChild(bubble);
+  playEncouragementSound(msg.sound);
+
+  // Animate entrance with type-specific effects
+  const entranceAnim = bubble.animate([
+    { transform: 'translateY(20px) scale(0.95)', opacity: 0 },
+    { transform: 'translateY(0) scale(1)', opacity: 1 }
+  ], { 
+    duration: 500, 
+    easing: 'cubic-bezier(0.18, 0.89, 0.32, 1.28)' 
+  });
+
+  // Add special effects for high-intensity messages
+  if (msg.intensity >= 3) {
+    const sparkles = document.createElement('div');
+    sparkles.className = 'sparkle-effect';
+    bubble.appendChild(sparkles);
+    
+    setTimeout(() => {
+      sparkles.remove();
+    }, 1000);
+  }
+
+  // Auto-remove after delay with fade out
+  setTimeout(() => {
+    bubble.animate([
+      { opacity: 1, transform: 'translateY(0) scale(1)' },
+      { opacity: 0, transform: 'translateY(-10px) scale(0.98)' }
+    ], { 
+      duration: 500,
+      easing: 'ease-out'
+    }).onfinish = () => bubble.remove();
+  }, msg.intensity >= 3 ? 6000 : 4500); // Longer display for important messages
 }
+
+// Enhanced subject detection for SSC CGL
+function detectSubject(folderName) {
+  if (!folderName) return null;
+  const lowerName = folderName.toLowerCase();
+  
+  const subjectMap = {
+    math: ['math', 'quant', 'arithmetic', 'algebra', 'geometry', 'trigonometry', 'calculation'],
+    english: ['english', 'grammar', 'vocab', 'vocabulary', 'comprehension', 'idiom', 'phrase'],
+    reasoning: ['reasoning', 'logic', 'puzzle', 'analogy', 'deduction'],
+    gk: ['gk', 'general knowledge', 'general studies', 'static', 'current affairs'],
+    science: ['science', 'physics', 'phy', 'chemistry', 'chem', 'biology', 'bio'],
+    history: ['history', 'modern', 'medieval', 'ancient', 'historical'],
+    polity: ['polity', 'constitution', 'governance', 'parliament', 'political']
+  };
+
+  for (const [subject, keywords] of Object.entries(subjectMap)) {
+    if (keywords.some(keyword => lowerName.includes(keyword))) {
+      return subject;
+    }
+  }
+  
+  return null;
+}
+
+// Helper function to format study time
+function formatStudyTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  return hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
+}
+
+// Enhanced sound system with fallbacks
+function playEncouragementSound(type) {
+  const sounds = {
+    start: 'https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3',
+    powerup: 'https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3',
+    progress: 'https://assets.mixkit.co/sfx/preview/mixkit-positive-interface-beep-221.mp3',
+    perfect: 'https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3',
+    // ... other sounds ...
+    fallback: 'https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3'
+  };
+
+  try {
+    const audio = new Audio(sounds[type] || sounds.fallback);
+    audio.volume = Math.min(0.3 + (encouragementLevel * 0.02), 0.6); // Volume scales with intensity
+    audio.play().catch(e => console.log("Audio play failed:", e));
+  } catch (e) {
+    console.log("Sound error:", e);
+  }
+}
+
+
+// Helper function to format study time
+
+// Helper function to format time
+function formatStudyTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  return hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
+}
+
+// Sound player (same as previous implementation)
+function playEncouragementSound(type) {
+  const sounds = {
+    start: 'https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3',
+    powerup: 'https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3',
+    progress: 'https://assets.mixkit.co/sfx/preview/mixkit-positive-interface-beep-221.mp3',
+    coins: 'https://assets.mixkit.co/sfx/preview/mixkit-coins-handling-1939.mp3',
+    achievement: 'https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3',
+    applause: 'https://assets.mixkit.co/sfx/preview/mixkit-audience-clapping-strongly-476.mp3',
+    fanfare: 'https://assets.mixkit.co/sfx/preview/mixkit-victory-fanfare-2013.mp3',
+    triumph: 'https://assets.mixkit.co/sfx/preview/mixkit-achievement-completed-2068.mp3',
+    click: 'https://assets.mixkit.co/sfx/preview/mixkit-select-click-1109.mp3',
+    ding: 'https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3'
+  };
+
+  if (sounds[type]) {
+    const audio = new Audio(sounds[type]);
+    audio.volume = 0.3;
+    audio.play().catch(e => console.log("Audio play failed:", e));
+  }
+}
+
+// Modify your updateFlashcardTime to trigger encouragement
 
 
 
@@ -941,11 +1360,19 @@ function goHome() {
   document.getElementById("showDifficultBtn").classList.remove("hidden");
   stopFlashcardTimer();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
+  stopFlashcardStudy();
+
 }
 
 
 
 
+function stopFlashcardStudy() {
+  if (currentFolder) {
+    endFlashcardStudySession(currentFolder);
+  }
+  // ... any existing stop code ...
+}
 
 
 
@@ -1979,24 +2406,25 @@ function checkNightOwl(results) {
 }
 
 // Add this to your updateMedalDisplay function
+// Update updateMedalDisplay function
 function updateMedalDisplay() {
   try {
     const bronze = document.getElementById('bronze-count');
     const silver = document.getElementById('silver-count');
     const gold = document.getElementById('gold-count');
     
-    if (bronze) bronze.textContent = medalCounts.bronze;
-    if (silver) silver.textContent = medalCounts.silver;
-    if (gold) gold.textContent = medalCounts.gold;
+    if (bronze) bronze.textContent = medalCounts.bronze || 0;
+    if (silver) silver.textContent = medalCounts.silver || 0;
+    if (gold) gold.textContent = medalCounts.gold || 0;
     
     // Update footer medals too
     const footerBronze = document.getElementById('footer-bronze');
     const footerSilver = document.getElementById('footer-silver');
     const footerGold = document.getElementById('footer-gold');
     
-    if (footerBronze) footerBronze.textContent = medalCounts.bronze;
-    if (footerSilver) footerSilver.textContent = medalCounts.silver;
-    if (footerGold) footerGold.textContent = medalCounts.gold;
+    if (footerBronze) footerBronze.textContent = medalCounts.bronze || 0;
+    if (footerSilver) footerSilver.textContent = medalCounts.silver || 0;
+    if (footerGold) footerGold.textContent = medalCounts.gold || 0;
   } catch (error) {
     console.error("Error updating medals:", error);
   }
@@ -2013,13 +2441,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Update UI components with null checks
     updateFolderList();
     updateMedalDisplay();
-    
+    checkBirthday();
+
     // Set theme
-    const savedTheme = localStorage.getItem("quizTheme");
-    if (savedTheme === "dark") {
-      document.body.classList.add("dark-theme");
-    }
-    
+      // Check if user has a saved preference
+      const savedTheme = localStorage.getItem("quizTheme");
+      
+      // If no preference saved, default to dark
+      if (savedTheme === null) {
+          document.body.classList.add("dark-theme");
+          localStorage.setItem("quizTheme", "dark");
+      } 
+      // Otherwise, use their saved preference
+      else {
+          document.body.classList.toggle("dark-theme", savedTheme === "dark");
+      }
     // Safely set current year
     const yearElement = document.getElementById('current-year');
     if (yearElement) {
@@ -2030,7 +2466,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     
   } catch (error) {
     console.error("Initialization error details:", error);
-    alert(`Initialization failed: ${error.message}. Please refresh.`);
+    // alert(`Initialization failed: ${error.message}. Please refresh.`);
   }
 });
 const maxRetries = 3;
@@ -2136,26 +2572,78 @@ function startFlashcardTimer() {
   flashcardInterval = setInterval(updateFlashcardTime, 1000);
   console.log("Flashcard timer started");
 }
+// Replace the existing updateFlashcardTime function with this:
+
+
 function updateFlashcardTime() {
+  if (!currentFolder || !flashcardStartTime) return;
+  
+  const today = new Date().toISOString().split('T')[0];
   const currentTime = Date.now();
   const elapsedSeconds = Math.floor((currentTime - flashcardStartTime) / 1000);
+  const now = Date.now();
+  const elapsedMinutes = Math.floor(folderStudyTime / 60);
+  
+  // Trigger different encouragement types
+  if (elapsedMinutes > 0 && elapsedMinutes % 15 === 0) {
+    showEncouragement('milestone');
+  } 
+  else if (incorrectQuestions.length > 3 && Math.random() > 0.5) {
+    showEncouragement('challenge');
+  }
+  else if (now - lastBreakReminder > 1800000) { // 30 minutes
+    showEncouragement('break');
+    lastBreakReminder = now;
+  }
+  else if (Math.random() < 0.15) { // 15% chance for general encouragement
+    showEncouragement();
+  }
+
+  // Update session time
   flashcardStartTime = currentTime;
   
-  if (!currentFolder) return;
-  
-  if (!flashcardTimeStats[currentFolder]) {
-    flashcardTimeStats[currentFolder] = { totalTime: 0, achievements: [] };
+  // Update daily study time
+  if (!flashcardDailyStudyTime[today]) {
+    flashcardDailyStudyTime[today] = {};
+  }
+  if (!flashcardDailyStudyTime[today][currentFolder]) {
+    flashcardDailyStudyTime[today][currentFolder] = 0;
   }
   
-  flashcardTimeStats[currentFolder].totalTime += elapsedSeconds;
-  localStorage.setItem('flashcardTimeStats', JSON.stringify(flashcardTimeStats));
+  flashcardDailyStudyTime[today][currentFolder] += elapsedSeconds;
+  localStorage.setItem('flashcardDailyStudyTime', JSON.stringify(flashcardDailyStudyTime));
   
-  // Check for milestones
-  checkFlashcardMilestones(flashcardTimeStats[currentFolder].totalTime);
+  // Check for medals
+  checkRealTimeMedals(currentFolder, flashcardDailyStudyTime[today][currentFolder]);
   
-  checkFlashcardAchievements();
+  // Show encouragement at appropriate intervals (20% chance each check)
+  if (Math.random() < 0.2) {
+    showContextualEncouragement();
+  }
 }
 
+// Add this new function for real-time medal checking
+function checkRealTimeMedals(folderName, currentStudyTime) {
+  if (!flashcardStudyMedals[folderName]) {
+    flashcardStudyMedals[folderName] = {};
+  }
+  
+  const today = new Date().toISOString().split('T')[0];
+  const medalThresholds = [
+    { type: 'bronze', threshold: 1850, awarded: flashcardStudyMedals[folderName].bronze === today },  // 30 minutes
+    { type: 'silver', threshold: 3650, awarded: flashcardStudyMedals[folderName].silver === today },  // 1 hour
+    { type: 'gold', threshold: 7300, awarded: flashcardStudyMedals[folderName].gold === today }       // 2 hours
+  ];
+  
+  medalThresholds.forEach(({ type, threshold, awarded }) => {
+    if (currentStudyTime >= threshold && !awarded) {
+      flashcardStudyMedals[folderName][type] = today;
+      awardFlashcardMedal(type, folderName);
+    }
+  });
+  
+  localStorage.setItem('flashcardStudyMedals', JSON.stringify(flashcardStudyMedals));
+}
 
 function checkFlashcardMilestones(currentTime) {
   // Find all milestones we've passed but haven't celebrated yet
@@ -2285,4 +2773,337 @@ function triggerFlashcardMilestoneCelebration(milestone) {
   setTimeout(() => {
     message.remove();
   }, 3500);
+}
+
+
+// Add this to your global variables
+let folderUsageStats = JSON.parse(localStorage.getItem('folderUsageStats')) || {};
+
+// Add this function to track folder usage
+function trackFolderUsage(folderName) {
+  if (!folderName) return;
+  
+  if (!folderUsageStats[folderName]) {
+    folderUsageStats[folderName] = 0;
+  }
+  folderUsageStats[folderName]++;
+  
+  localStorage.setItem('folderUsageStats', JSON.stringify(folderUsageStats));
+}
+
+// Call this function whenever a folder is selected
+function getTopFolders(limit = 5) {
+  const folders = Object.keys(folderUsageStats);
+  if (folders.length === 0) return [];
+  
+  return folders
+    .sort((a, b) => folderUsageStats[b] - folderUsageStats[a])
+    .slice(0, limit);
+}
+function updateFrequentFoldersList() {
+  const frequentFoldersContainer = document.getElementById('frequentFolders');
+  if (!frequentFoldersContainer) return;
+  
+  const topFolders = getTopFolders(5);
+  
+  frequentFoldersContainer.innerHTML = '';
+  
+  if (topFolders.length === 0) {
+    frequentFoldersContainer.innerHTML = '<li>No folder usage data yet</li>';
+    return;
+  }
+  
+  topFolders.forEach(folder => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.className = 'footer-link';
+    btn.textContent = folder;
+    btn.onclick = () => {
+      document.getElementById('folderSelect').value = folder;
+      selectFolder();
+      goHome();
+    };
+    li.appendChild(btn);
+    frequentFoldersContainer.appendChild(li);
+  });
+}
+
+// Call this in your DOMContentLoaded event
+document.addEventListener("DOMContentLoaded", async () => {
+  // ... existing code ...
+  updateFrequentFoldersList();
+});
+
+
+// Add these to your global variables
+let flashcardStudyMedals = JSON.parse(localStorage.getItem('flashcardStudyMedals')) || {};
+let flashcardDailyStudyTime = JSON.parse(localStorage.getItem('flashcardDailyStudyTime')) || {};
+let flashcardSessionStartTime = null;
+
+
+// Add these constants for medal thresholds (in seconds)
+const FLASHCARD_MEDAL_THRESHOLDS = {
+  bronze: 1800,  // 30 minutes
+  silver: 3600,  // 1 hour
+  gold: 7200     // 2 hours
+};
+function startFlashcardTimer() {
+  flashcardStartTime = Date.now();
+  flashcardInterval = setInterval(() => {
+    const currentTime = Math.floor((Date.now() - flashcardStartTime) / 1000);
+    
+    // Update current folder's study time
+    const today = new Date().toISOString().split('T')[0];
+    if (!flashcardDailyStudyTime[today]) {
+      flashcardDailyStudyTime[today] = {};
+    }
+    if (!flashcardDailyStudyTime[today][currentFolder]) {
+      flashcardDailyStudyTime[today][currentFolder] = 0;
+    }
+    flashcardDailyStudyTime[today][currentFolder] = currentTime;
+    
+    // Check for milestones and medals
+    checkFlashcardMilestones(currentTime);
+    checkRealTimeMedals(currentFolder, currentTime);
+    
+    localStorage.setItem('flashcardDailyStudyTime', JSON.stringify(flashcardDailyStudyTime));
+  }, 1000);
+}
+// Add this function to start tracking flashcard study time
+function startFlashcardStudySession(folderName) {
+  if (!folderName) return;
+  
+  // Reset daily timer if it's a new day
+  const today = new Date().toISOString().split('T')[0];
+  if (!flashcardDailyStudyTime[today]) {
+    flashcardDailyStudyTime[today] = {};
+  }
+  if (!flashcardDailyStudyTime[today][folderName]) {
+    flashcardDailyStudyTime[today][folderName] = 0;
+  }
+  
+  flashcardSessionStartTime = Date.now();
+  localStorage.setItem('flashcardDailyStudyTime', JSON.stringify(flashcardDailyStudyTime));
+}
+
+// Add this function to stop tracking and award medals
+function endFlashcardStudySession(folderName) {
+  if (!flashcardSessionStartTime || !folderName) return;
+  
+  const today = new Date().toISOString().split('T')[0];
+  const sessionTime = Math.floor((Date.now() - flashcardSessionStartTime) / 1000);
+  
+  // Update daily study time
+  flashcardDailyStudyTime[today][folderName] = 
+    (flashcardDailyStudyTime[today][folderName] || 0) + sessionTime;
+  
+  localStorage.setItem('flashcardDailyStudyTime', JSON.stringify(flashcardDailyStudyTime));
+  
+  // Check for medals
+  checkFlashcardMedals(folderName, flashcardDailyStudyTime[today][folderName]);
+}
+
+// Add this function to check and award medals
+function checkFlashcardMedals(folderName, totalStudyTime) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  if (!flashcardStudyMedals[folderName]) {
+    flashcardStudyMedals[folderName] = {};
+  }
+  
+  // Check each medal threshold
+  Object.entries(FLASHCARD_MEDAL_THRESHOLDS).forEach(([medal, threshold]) => {
+    if (totalStudyTime >= threshold && !flashcardStudyMedals[folderName][medal]) {
+      flashcardStudyMedals[folderName][medal] = today;
+      awardFlashcardMedal(medal, folderName);
+    }
+  });
+  
+  localStorage.setItem('flashcardStudyMedals', JSON.stringify(flashcardStudyMedals));
+}
+
+// Add this function to award medals with animation
+function awardFlashcardMedal(medalType, folderName) {
+  // Update medal counts
+  medalCounts[medalType] = (medalCounts[medalType] || 0) + 1;
+  localStorage.setItem(`medal${medalType.charAt(0).toUpperCase() + medalType.slice(1)}`, medalCounts[medalType]);
+  
+  // Create floating medal animation
+  const medal = document.createElement('div');
+  medal.className = 'flashcard-medal';
+  medal.innerHTML = medalType === 'bronze' ? '🥉' : medalType === 'silver' ? '🥈' : '🥇';
+  document.body.appendChild(medal);
+  
+  // Remove medal after animation
+  setTimeout(() => {
+    medal.remove();
+  }, 3000);
+  
+  // Show notification
+  const medalNames = {
+    bronze: 'Bronze',
+    silver: 'Silver',
+    gold: 'Gold'
+  };
+  const times = {
+    bronze: '30 minutes',
+    silver: '1 hour',
+    gold: '2 hours'
+  };
+  
+  showAchievementNotification(
+    `${medalNames[medalType]} Flashcard Medal Earned!`,
+    `You've studied ${folderName} for ${times[medalType]} today!`,
+    medalType === 'bronze' ? '🥉' : medalType === 'silver' ? '🥈' : '🥇'
+  );
+  
+  // Update medal display with animation
+  updateMedalDisplay();
+  
+  // Trigger appropriate confetti
+  const confettiConfig = {
+    particleCount: 100,
+    spread: 70,
+    origin: { y: 0.6 }
+  };
+  
+  if (medalType === 'gold') {
+    confettiConfig.colors = ['#ffd700', '#ffffff', '#ffd700'];
+    confettiConfig.particleCount = 150;
+  } else if (medalType === 'silver') {
+    confettiConfig.colors = ['#c0c0c0', '#ffffff', '#c0c0c0'];
+  } else {
+    confettiConfig.colors = ['#cd7f32', '#ffffff', '#cd7f32'];
+  }
+  
+  confetti(confettiConfig);
+  
+  // Pulse the medal counter in header
+  const medalElement = document.querySelector(`.medal.${medalType}`);
+  if (medalElement) {
+    medalElement.classList.add('medal-pulse');
+    setTimeout(() => {
+      medalElement.classList.remove('medal-pulse');
+    }, 1000);
+  }
+}
+
+
+
+//testing 
+function showRandomEncouragement() {
+  const messages = [
+  { text: "You're doing great! 👍", emoji: "✨" },
+  { text: "Knowledge is power! 💪", emoji: "🧠" },
+  { text: "Every minute counts! ⏱️", emoji: "🌟" },
+  { text: "One step at a time! 👣", emoji: "🚀" },
+  { text: "Stay curious, stay sharp! 🧐", emoji: "🔍" },
+  { text: "Keep pushing forward! ➡️", emoji: "🔥" },
+  { text: "You're on the right path! 🛤️", emoji: "✅" },
+  { text: "Big things start small! 🌱", emoji: "🌈" },
+  { text: "Consistency is key! 🔑", emoji: "📆" },
+  { text: "Believe in yourself! 💖", emoji: "🌠" },
+  { text: "Almost there, keep it up! ⛰️", emoji: "🏁" },
+  { text: "Smash your goals! 🎯", emoji: "💥" },
+  { text: "Focus mode: ON 🧘‍♂️", emoji: "🛡️" },
+  { text: "Progress over perfection! 🛠️", emoji: "📈" },
+  { text: "Dream big, start now! 🌌", emoji: "💫" },
+  { text: "Hard work pays off! 🏋️", emoji: "🏆" },
+  { text: "You're unstoppable! 🏃‍♀️", emoji: "💨" },
+  { text: "Turn challenges into victories! 🧗", emoji: "🪄" },
+  { text: "You got this! 🙌", emoji: "🎉" },
+  { text: "Make today count! 📅", emoji: "🌞" },
+  { text: "Learning never stops! 📚", emoji: "🧭" },
+  { text: "Dedication leads to success! 🎓", emoji: "🥇" },
+  { text: "Stay focused, stay winning! 🎮", emoji: "🥳" },
+  { text: "One more push! 💼", emoji: "🚴" },
+  { text: "Break time? You've earned it! ☕", emoji: "💤" },
+  { text: "Level up your mind! 🧠", emoji: "🆙" },
+  { text: "Greatness takes time ⏳", emoji: "🛤️" },
+  { text: "Effort never goes unnoticed! 👀", emoji: "📣" },
+  { text: "Keep shining bright! 💡", emoji: "🌟" },
+  { text: "You’re building your future! 🏗️", emoji: "🧱" },
+  { text: "Finish strong! 🏁", emoji: "⚡" },
+  { text: "Rise. Grind. Repeat. 🔁", emoji: "🏋️‍♂️" },
+  { text: "Brains + Hustle = Magic! ✨", emoji: "🧙" },
+  { text: "Success starts with action! 🏃", emoji: "💡" }
+];
+
+  const msg = messages[Math.floor(Math.random() * messages.length)];
+  
+  const bubble = document.createElement('div');
+  bubble.innerHTML = `
+    <div style="
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.9);
+      color: #333;
+      padding: 10px 15px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      z-index: 999;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: fadeInOut 3s forwards;
+    ">
+      <span style="font-size: 1.2em;">${msg.emoji}</span>
+      ${msg.text}
+    </div>
+  `;
+  document.body.appendChild(bubble);
+  
+  setTimeout(() => bubble.remove(), 3000);
+}
+
+function triggerHighAccuracyCelebration() {
+  // Fireworks effect
+  playCelebrationSound();
+
+  const duration = 3000;
+  const animationEnd = Date.now() + duration;
+  const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 1000 };
+
+  function randomInRange(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  const interval = setInterval(function() {
+    const timeLeft = animationEnd - Date.now();
+
+    if (timeLeft <= 0) {
+      return clearInterval(interval);
+    }
+
+    const particleCount = 50 * (timeLeft / duration);
+    confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+    });
+    confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+    });
+  }, 250);
+
+  // Floating trophy animation
+  const trophy = document.createElement('div');
+  trophy.innerHTML = '🏆';
+  trophy.style.position = 'fixed';
+  trophy.style.fontSize = '100px';
+  trophy.style.left = '50%';
+  trophy.style.top = '50%';
+  trophy.style.transform = 'translate(-50%, -50%) scale(0)';
+  trophy.style.zIndex = '1001';
+  trophy.style.textShadow = '0 0 10px gold';
+  trophy.style.animation = 'trophyRise 2s forwards';
+  document.body.appendChild(trophy);
+
+  setTimeout(() => {
+    trophy.remove();
+  }, 2000);
 }
