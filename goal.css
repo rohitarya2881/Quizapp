@@ -172,7 +172,7 @@
 .day-cell.goal-met {
     position: relative;
     overflow: visible;
-    background-color: #40c057 !important;
+/*     background-color: #40c057 !important; */
     border: 1px solid #2f9e44;
 }
 
