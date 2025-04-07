@@ -11,6 +11,8 @@
     <script src="script.js" defer></script>
     <script src="birth.js" defer></script>
     <link rel="stylesheet" href="birth.css">
+    <script src="goal.js" defer></script>
+    <link rel="stylesheet" href="goal.css">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,6 +59,7 @@
     <div id="mobile-menu">
         <button id="close-menu-btn" onclick="toggleMenu()">&times;</button>
         <h3>Quiz Management</h3>
+        <button class="button-quiz" onclick="setFolderGoals()">Set Folder Goals</button>
         <button class="button-quiz" onclick="createFolder()">Create Folder</button>
         <button class="button-quiz" onclick="document.getElementById('jsonFileInputUpload').click()">Upload Quiz
             JSON</button>
@@ -155,6 +158,11 @@
             <h3>Achievements</h3>
             <div id="achievementsList" class="stat-grid"></div>
         </div>
+        <div class="analysis-section">
+            <h3>Consistency Calendar</h3>
+            <div id="consistencyCalendar">
+                <div id="calendarPlaceholder">Loading consistency data...</div>
+              </div>          </div>
     </div>
 
 
@@ -177,8 +185,16 @@
                     <li><button class="footer-link" onclick="goHome()">Home</button></li>
                     <li><button class="footer-link" onclick="showAnalysis()">Analytics</button></li>
                     <li><button class="footer-link" onclick="showFlashcards()">Flashcards</button></li>
+                    <li><button class="footer-link" onclick="setFolderGoals()">Set Folder  Goals</button></li>
+
                 </ul>
             </div>
+            <div class="footer-section">
+                <h4>Active Goals</h4>
+                <ul id="footerGoals">
+                  <!-- Will be populated by JavaScript -->
+                </ul>
+              </div>
             <div class="footer-section">
                 <h4>Statistics</h4>
                 <div class="footer-stats">
