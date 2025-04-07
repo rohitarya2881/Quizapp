@@ -453,6 +453,8 @@ async function showResults() {
   if (accuracy >= 90) {
     triggerHighAccuracyCelebration();
   }
+  // In showResults function, before the last closing brace
+await trackGoalProgress(score, currentQuiz.length);
 }
 
 function triggerFlashcardMilestoneCelebration(milestone) {
@@ -2438,37 +2440,58 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Load data
     await loadQuizzes();
     
+    // Initialize goal tracking variables properly
+    folderGoals = JSON.parse(localStorage.getItem('folderGoals')) || {};
+    dailyProgress = JSON.parse(localStorage.getItem('dailyProgress')) || {};
+    
     // Update UI components with null checks
     updateFolderList();
     updateMedalDisplay();
     checkBirthday();
-
+    checkMissedDays();
+    
     // Set theme
-      // Check if user has a saved preference
-      const savedTheme = localStorage.getItem("quizTheme");
-      
-      // If no preference saved, default to dark
-      if (savedTheme === null) {
-          document.body.classList.add("dark-theme");
-          localStorage.setItem("quizTheme", "dark");
-      } 
-      // Otherwise, use their saved preference
-      else {
-          document.body.classList.toggle("dark-theme", savedTheme === "dark");
-      }
-    // Safely set current year
+    const savedTheme = localStorage.getItem("quizTheme");
+    document.body.classList.toggle("dark-theme", savedTheme === "dark" || savedTheme === null);
+    
+    // Set current year
     const yearElement = document.getElementById('current-year');
-    if (yearElement) {
-      yearElement.textContent = new Date().getFullYear();
-    } else {
-      console.warn("Element 'current-year' not found");
-    }
+    if (yearElement) yearElement.textContent = new Date().getFullYear();
+    
+    // Update goal-related components
+    updateGoalDisplay();
+    updateFooterGoals();
+    // At the start of your script.js or goal.js
+checkForNewDay();
+    // Render calendar after everything else is ready
+    setTimeout(() => {
+      try {
+        renderConsistencyCalendar();
+      } catch (err) {
+        console.error("Error rendering calendar:", err);
+      }
+    }, 100);
     
   } catch (error) {
     console.error("Initialization error details:", error);
-    // alert(`Initialization failed: ${error.message}. Please refresh.`);
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const maxRetries = 3;
 let retries = 0;
 
