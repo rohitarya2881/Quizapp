@@ -370,7 +370,15 @@ function startRapidTimer(totalSeconds, labelText, onComplete) {
   const timerValue = document.getElementById('rapidTimerValue');
   
   // Start timer
-  const timer = setInterval(() => {
+  currentRapidTimer = setInterval(() => {
+    // Check if quiz is already completed
+    if (currentQuestionIndex >= currentQuiz.length) {
+      clearInterval(currentRapidTimer);
+      currentRapidTimer = null;
+      timerDisplay.remove();
+      return;
+    }
+    
     secondsLeft--;
     timerValue.textContent = formatTime(secondsLeft);
     
@@ -381,13 +389,12 @@ function startRapidTimer(totalSeconds, labelText, onComplete) {
     
     // When time is up
     if (secondsLeft <= 0) {
-      clearInterval(timer);
+      clearInterval(currentRapidTimer);
+      currentRapidTimer = null;
       timerDisplay.remove();
       onComplete();
     }
   }, 1000);
-  return timer; // Return the timer ID
-
 }
 function showRapidRoundResults() {
   // Show standard quiz results
@@ -425,16 +432,11 @@ function showRapidRoundResults() {
   buttonContainer.appendChild(endBtn);
   resultsContainer.appendChild(buttonContainer);
   
-  // Clear any existing timer
-  const timerDisplay = document.getElementById('rapidTimerDisplay');
-  if (timerDisplay) timerDisplay.remove();
-  
   // Show completion celebration if all answers were correct
   if (score === currentQuiz.length) {
     triggerHighAccuracyCelebration();
   }
 }
-
 let currentRapidTimer = null;
 
 function restartRapidRound() {
