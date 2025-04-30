@@ -1303,6 +1303,9 @@ function loadQuestion() {
 
 function goHome() {
   // Clear timer and reset states
+  if (rapidRoundActive) {
+    cleanupRapidRound();
+  }
   if (quizTimer) {
     clearInterval(quizTimer);
     quizTimer = null;
