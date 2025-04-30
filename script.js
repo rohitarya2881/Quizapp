@@ -344,7 +344,7 @@ async function restoreData(event) {
 
 // Load the current question
 
-async function selectAnswer(selectedIndex) {
+aasync function selectAnswer(selectedIndex) {
   const endTime = Date.now();
   const timeTaken = (endTime - questionStartTime) / 1000;
   questionTimes.push(timeTaken);
@@ -355,7 +355,6 @@ async function selectAnswer(selectedIndex) {
   
   if (isCorrect) {
     score++;
-    // Track correct question by some identifier (could use question text or index)
     question.correctlyAnswered = true;
   } else {
     question.timesIncorrect = (question.timesIncorrect || 0) + 1;
@@ -364,26 +363,31 @@ async function selectAnswer(selectedIndex) {
   }
   
   currentQuestionIndex++;
-  if (currentQuestionIndex < currentQuiz.length) {
-    loadQuestion();
-  } else {
-    // Check if we're in rapid round mode
-    if (rapidRoundActive) {
-      // Clear the quiz timer if it exists
+  
+  // Check if we're in rapid round mode
+  if (rapidRoundActive) {
+    if (currentQuestionIndex < currentQuiz.length) {
+      // Continue to next question in rapid round
+      loadQuestion();
+    } else {
+      // Rapid round complete
       if (currentRapidTimer) {
         clearInterval(currentRapidTimer);
         currentRapidTimer = null;
       }
-      // Remove the timer display if it exists
       const timerDisplay = document.getElementById('rapidTimerDisplay');
       if (timerDisplay) timerDisplay.remove();
-      
-      // Show results immediately
       await showRapidRoundResults();
+    }
+  } else {
+    // Normal quiz mode
+    if (currentQuestionIndex < currentQuiz.length) {
+      loadQuestion();
     } else {
       await showResults();
     }
   }
+  
   questionStartTime = Date.now();
 }
 
