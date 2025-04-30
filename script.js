@@ -353,40 +353,14 @@ async function selectAnswer(selectedIndex) {
   const question = currentQuiz[currentQuestionIndex];
   const isCorrect = selectedIndex === question.correctIndex;
   
-  // Track recall accuracy
-  if (recallMode) {
-    let recallStatus = recallAttempts[currentQuestionIndex] || "🟡"; // Default to needed options
-    
-    // If marked "Remembered" but answered wrong, change to "Forgot"
-    if (recallStatus === "🟢" && !isCorrect) {
-      recallStatus = "🔴";
-      recallAttempts[currentQuestionIndex] = "🔴"; // Update the recall attempt
-    }
-    
-    // Update question with recall data
-    question.recallData = question.recallData || {};
-    question.recallData.lastAttempt = {
-      status: recallStatus,
-      correct: isCorrect,
-      timestamp: new Date().toISOString()
-    };
-  }
-  
   if (isCorrect) {
     score++;
+    // Track correct question by some identifier (could use question text or index)
     question.correctlyAnswered = true;
-    
-    // If recalled correctly without options (🟢), remove from HardRecall if present
-    if (recallMode && recallAttempts[currentQuestionIndex] === "🟢") {
-      removeFromHardRecall(question);
-    }
   } else {
     question.timesIncorrect = (question.timesIncorrect || 0) + 1;
     question.selectedAnswer = question.options[selectedIndex];
     incorrectQuestions.push(question);
-    
-    // Always add to HardRecall if answered incorrectly
-    addToHardRecall(question);
   }
   
   currentQuestionIndex++;
@@ -412,6 +386,7 @@ async function selectAnswer(selectedIndex) {
   }
   questionStartTime = Date.now();
 }
+
 // Fixed showResults function
 async function showResults() {
   // Calculate average time threshold
