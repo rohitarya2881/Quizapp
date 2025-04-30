@@ -355,7 +355,6 @@ async function selectAnswer(selectedIndex) {
   
   if (isCorrect) {
     score++;
-    // Track correct question by some identifier (could use question text or index)
     question.correctlyAnswered = true;
   } else {
     question.timesIncorrect = (question.timesIncorrect || 0) + 1;
@@ -364,14 +363,29 @@ async function selectAnswer(selectedIndex) {
   }
   
   currentQuestionIndex++;
+  
   if (currentQuestionIndex < currentQuiz.length) {
     loadQuestion();
   } else {
-    await showResults();
+    // Quiz completed - show results immediately
+    if (rapidRoundActive) {
+      // Clear the timer if it exists
+      if (currentRapidTimer) {
+        clearInterval(currentRapidTimer);
+        currentRapidTimer = null;
+      }
+      // Remove timer display if it exists
+      const timerDisplay = document.getElementById('rapidTimerDisplay');
+      if (timerDisplay) timerDisplay.remove();
+      // Show rapid round results with buttons
+      await showRapidRoundResults();
+    } else {
+      await showResults();
+    }
   }
+  
   questionStartTime = Date.now();
 }
-
 // Fixed showResults function
 async function showResults() {
   // Calculate average time threshold
