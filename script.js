@@ -3255,3 +3255,157 @@ function formatExplanation(explanation) {
   
   return `<span class="explanation-text">${formattedText}</span>`;
 }
+function showAddQuestionDialog() {
+  if (!currentFolder) {
+    alert("Please select a folder first!");
+    return;
+  }
+
+  // Create modal overlay
+  const modal = document.createElement('div');
+  modal.className = 'edit-question-modal';
+  
+  // Create form with empty fields
+  modal.innerHTML = `
+    <div class="edit-question-form">
+      <h3>Add New Question</h3>
+      <form id="addQuestionForm">
+        <label>
+          Question Text:
+          <textarea name="question" required></textarea>
+        </label>
+        
+        <div class="options-container">
+          <label>Options:</label>
+          <div class="option-row">
+            <input type="text" name="option0" required>
+            <input type="radio" name="correctIndex" value="0" checked>
+            <span>Correct</span>
+          </div>
+          <div class="option-row">
+            <input type="text" name="option1" required>
+            <input type="radio" name="correctIndex" value="1">
+            <span>Correct</span>
+          </div>
+          <div class="option-row">
+            <input type="text" name="option2" required>
+            <input type="radio" name="correctIndex" value="2">
+            <span>Correct</span>
+          </div>
+          <div class="option-row">
+            <input type="text" name="option3" required>
+            <input type="radio" name="correctIndex" value="3">
+            <span>Correct</span>
+          </div>
+        </div>
+        
+        <label>
+          Explanation:
+          <textarea name="explanation"></textarea>
+        </label>
+        
+        <label>
+          Position (leave blank to add at end):
+          <input type="number" name="position" min="1" placeholder="Position number">
+        </label>
+        
+        <div class="form-buttons">
+          <button type="submit" class="quiz-btn">Add Question</button>
+          <button type="button" class="quiz-btn cancel-btn">Cancel</button>
+          <button type="button" class="quiz-btn add-option-btn">Add Option</button>
+        </div>
+      </form>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Handle form submission
+  const form = modal.querySelector('#addQuestionForm');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    // Get form values
+    const formData = new FormData(form);
+    const newQuestion = {
+      question: formData.get('question'),
+      options: [],
+      correctIndex: parseInt(formData.get('correctIndex')),
+      explanation: formData.get('explanation') || '',
+      timesIncorrect: 0
+    };
+    
+    // Get all options
+    for (let i = 0; i < 4; i++) {
+      const option = formData.get(`option${i}`);
+      if (option) {
+        newQuestion.options.push(option);
+      }
+    }
+    
+    // Validate at least 2 options
+    if (newQuestion.options.length < 2) {
+      alert("Please provide at least 2 options");
+      return;
+    }
+    
+    // Validate correct index is within range
+    if (newQuestion.correctIndex >= newQuestion.options.length) {
+      alert("Correct answer must be one of the provided options");
+      return;
+    }
+    
+    // Get position (default to end if not specified)
+    const position = formData.get('position') ? parseInt(formData.get('position')) - 1 : -1;
+    
+    // Add to folder
+    if (position >= 0 && position <= quizzes[currentFolder].length) {
+      quizzes[currentFolder].splice(position, 0, newQuestion);
+    } else {
+      quizzes[currentFolder].push(newQuestion);
+    }
+    
+    // Save to IndexedDB
+    saveQuizzes().then(() => {
+      // Close modal
+      modal.remove();
+      // Show success message
+      alert("Question added successfully!");
+    }).catch(error => {
+      console.error("Error saving question:", error);
+      alert("Failed to add question. Please try again.");
+    });
+  });
+  
+  // Handle cancel
+  modal.querySelector('.cancel-btn').addEventListener('click', () => {
+    modal.remove();
+  });
+  
+  // Handle adding options
+  let optionCount = 4; // Start with 4 options
+  modal.querySelector('.add-option-btn').addEventListener('click', () => {
+    if (optionCount >= 6) {
+      alert("Maximum of 6 options allowed");
+      return;
+    }
+    
+    const optionsContainer = modal.querySelector('.options-container');
+    const newOption = document.createElement('div');
+    newOption.className = 'option-row';
+    newOption.innerHTML = `
+      <input type="text" name="option${optionCount}" required>
+      <input type="radio" name="correctIndex" value="${optionCount}">
+      <span>Correct</span>
+    `;
+    optionsContainer.appendChild(newOption);
+    optionCount++;
+  });
+  
+  // Close modal when clicking outside
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+}
