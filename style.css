@@ -1571,75 +1571,7 @@ footer {
 
 
 
-/* Edit Question Modal */
-.edit-question-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
 
-.edit-question-form {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.edit-question-form h3 {
-  margin-top: 0;
-}
-
-.edit-question-form label {
-  display: block;
-  margin-bottom: 15px;
-}
-
-.edit-question-form textarea,
-.edit-question-form input[type="text"] {
-  width: 100%;
-  padding: 8px;
-  margin-top: 5px;
-  box-sizing: border-box;
-}
-
-.edit-question-form textarea {
-  min-height: 80px;
-}
-
-.options-container {
-  margin-bottom: 15px;
-}
-
-.option-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.option-row input[type="text"] {
-  flex: 1;
-  margin-right: 10px;
-}
-
-.option-row input[type="radio"] {
-  margin-right: 5px;
-}
-
-.form-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
 
 /* Flashcard edit button */
 .flashcard-header {
@@ -1648,24 +1580,6 @@ footer {
   align-items: center;
 }
 
-.edit-question-btn {
-  background: none;
-  border: none;
-  font-size: 1.2em;
-  cursor: pointer;
-  padding: 5px;
-  margin-left: 10px;
-}
-
-.edit-question-btn:hover {
-  color: #4a6fa5;
-}
-
-.explanation-text {
-  display: inline-block; /* Ensures proper spacing */
-  line-height: 1.5; /* Improves readability */
-  white-space: pre-line; /* Preserves line breaks naturally */
-}
 
 
 
@@ -1840,3 +1754,326 @@ footer {
 .rapid-round-btn:hover {
   background-color: #e67e22;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Rapid Round Modal */
+.rapid-round-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.rapid-round-dialog {
+  background-color: #06080D;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.rapid-round-dialog h3 {
+  margin-top: 0;
+  color: #4a6fa5;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.form-group input, 
+.form-group select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.range-inputs input {
+  flex: 1;
+}
+
+.button-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.cancel-btn {
+  background-color: #e74c3c;
+}
+
+/* Rapid Timer */
+.rapid-timer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: #4a6fa5;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.rapid-timer.warning {
+  background-color: #e74c3c;
+  animation: pulse 1s infinite;
+}
+
+.rapid-timer-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Rapid Round Button */
+.rapid-round-btn {
+  background-color: #f39c12;
+  margin-top: 15px;
+}
+
+.rapid-round-btn:hover {
+  background-color: #e67e22;
+}
+
+
+
+
+:root {
+  --primary-color: #4a6fa5;
+  --primary-dark: #3a5a80;
+  --secondary-color: #3498db;
+  --secondary-dark: #2980b9;
+  --success-color: #2ecc71;
+  --warning-color: #f39c12;
+  --danger-color: #e74c3c;
+  --light-bg: #f5f5f5;
+  --light-text: #333;
+  --light-container: #ffffff;
+  --light-border: #e0e0e0;
+  --dark-bg: #010409;
+  --dark-text: rgba(255, 255, 255, 0.8);
+  --dark-container: #0D1117;
+  --dark-border: rgba(255, 255, 255, 0.125);
+  --transition-speed: 0.3s;
+}
+
+
+
+
+
+
+/* Edit Question Modal */
+.edit-question-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.edit-question-form {
+  background-color: var(--light-container);
+  padding: 25px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  transition: all var(--transition-speed) ease;
+}
+
+.dark-theme .edit-question-form {
+  background-color: var(--dark-container);
+  border: 1px solid var(--dark-border);
+}
+
+.edit-question-form h3 {
+  margin-top: 0;
+  color: var(--primary-color);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--light-border);
+}
+
+.dark-theme .edit-question-form h3 {
+  color: var(--secondary-color);
+  border-bottom-color: var(--dark-border);
+}
+
+.edit-question-form label {
+  display: block;
+  margin-bottom: 15px;
+  color: var(--light-text);
+}
+
+.dark-theme .edit-question-form label {
+  color: var(--dark-text);
+}
+
+.edit-question-form textarea,
+.edit-question-form input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  margin-top: 8px;
+  border: 1px solid var(--light-border);
+  border-radius: 6px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.dark-theme .edit-question-form textarea,
+.dark-theme .edit-question-form input[type="text"] {
+  background-color: rgba(0,0,0,0.2);
+  color: var(--dark-text);
+  border-color: var(--dark-border);
+}
+
+.edit-question-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.options-container {
+  margin-bottom: 20px;
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.option-row input[type="text"] {
+  flex: 1;
+  padding: 10px;
+}
+
+.option-row input[type="radio"] {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.form-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-top: 25px;
+}
+
+/* Flashcard edit button */
+.flashcard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.edit-question-btn {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 5px;
+  color: var(--light-text);
+  transition: color 0.2s;
+}
+
+.dark-theme .edit-question-btn {
+  color: var(--dark-text);
+}
+
+.edit-question-btn:hover {
+  color: var(--primary-color);
+}
+
+.dark-theme .edit-question-btn:hover {
+  color: var(--secondary-color);
+}
+
+.explanation-text {
+  display: inline-block;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+/* Responsive Design */
+@media (max-width: 768px) {
+   
+    
+    .edit-question-form, .rapid-round-dialog {
+      padding: 20px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+   
+    .option-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .option-row input[type="text"] {
+      width: 100%;
+    }
+    
+    .form-buttons, .button-group {
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .form-buttons button, .button-group button {
+      width: 100%;
+    }
+  }
