@@ -3413,9 +3413,55 @@ function showAddQuestionDialog() {
 
 
 // Add this function to delete a folder
+// Add this function to confirm folder deletion
 async function confirmDeleteFolder() {
+  if (!currentFolder) {
+    alert("Please select a folder first!");
+    return;
+  }
+
+  if (confirm(`Are you sure you want to permanently delete the folder "${currentFolder}" and all its data? This cannot be undone!`)) {
+    await deleteFolder(currentFolder);
+  }
 }
 
 // Add this function to handle folder deletion with all its data
 async function deleteFolder(folderName) {
+  try {
+    // 1. Delete from quizzes object
+    delete quizzes[folderName];
+    delete quizzes[`${folderName}_Incorrect`];
+    
+    // 2. Save updated quizzes to IndexedDB
+    await saveQuizzes();
+    
+    // 3. Delete analytics data for this folder
+    const transaction = db.transaction(["analytics"], "readwrite");
+    const store = transaction.objectStore("analytics");
+    const index = store.index("folderName");
+    const request = index.openCursor(folderName);
+    
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        store.delete(cursor.primaryKey);
+        cursor.continue();
+      }
+    };
+    
+    // 4. Reset current folder if it was the deleted one
+    if (currentFolder === folderName) {
+      currentFolder = "";
+    }
+    
+    // 5. Update UI
+    updateFolderList();
+    document.getElementById("quizOptions").classList.add("hidden");
+    
+    alert(`Folder "${folderName}" and all its data have been deleted successfully.`);
+    
+  } catch (error) {
+    console.error("Error deleting folder:", error);
+    alert("Failed to delete folder. Please try again.");
+  }
 }
