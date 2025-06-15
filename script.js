@@ -3409,3 +3409,13 @@ function showAddQuestionDialog() {
     }
   });
 }
+
+
+
+// Add this function to delete a folder
+async function confirmDeleteFolder() {
+}
+
+// Add this function to handle folder deletion with all its data
+async function deleteFolder(folderName) {
+}
